@@ -1,82 +1,120 @@
 #include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+// マクロここから =============================================================================
+#define TO_STRING(def) #def,
+#define TO_ENUM(def) def,
+#define TO_STR_AND_ENUM(def) {#def, def},
+
+#define MNEMONIC(X)            \
+    /*頻出命令*/               \
+    X(IMM)                     \
+    X(MOV)                     \
+    /*四則演算*/               \
+    X(ADD)                     \
+    X(SUB)                     \
+    X(MUL)                     \
+    X(DIV)                     \
+    /*ジャンプ*/               \
+    X(JMP)                     \
+    /*比較、比較結果ジャンプ*/ \
+    X(CMP)                     \
+    X(JG)                      \
+    X(JE)                      \
+    X(JNE)                     \
+    X(JL)                      \
+    X(JGE)                     \
+    X(JLE)                     \
+    /*論理演算*/               \
+    X(AND)                     \
+    X(OR)                      \
+    X(XOR)                     \
+    X(NOT)
+
+#define REGISTER(R) \
+    R(eax)          \
+    R(ebx)          \
+    R(ecx)          \
+    R(edx)
+
+#define FLAG(F) \
+    F(ZF)       \
+    F(SF)       \
+    /* OF,CFはあとで作れそうなら*/
+// マクロここまで ==========================================================================================
+
 typedef enum
 {
-    eax,
-    ebx,
-    ecx,
-    edx,
-} reg_id;
+    // eax,ebx,,,,,,
+    REGISTER(TO_ENUM)
+    REG_COUNT
+} Reg_id;
 
 const char *reg_names[] = {
-    "eax", "ebx", "ecx", "edx"};
-
-typedef struct CPU
-{
-    int reg[4];
-    int pc;
-    int flag[2]; // OF,CFは今回除外
-} cpu;
+    // "eax","ebx",,,,,
+    REGISTER(TO_STRING)};
 
 typedef enum
 {
-    // 四則演算
-    IMM,
-    MOV,
-    ADD,
-    SUB,
-    MUL,
-    DIV,
-    // ジャンプ
-    JMP,
-    // 比較、比較結果ジャンプ
-    CMP,
-    JG,
-    JE,
-    JNE,
-    JL,
-    JGE,
-    JLE,
-    // 論理演算
-    AND,
-    OR,
-    XOR,
-    NOT
-} opcode;
-typedef enum
-{
-    ZF,
-    SF
-    // OF,CFは今回除外
-} flag;
+    // ZF,SF,,,,,,
+    FLAG(TO_ENUM)
+    FLAG_COUNT
+} Flag_id;
 
 const char *flag_names[] = {
-    "ZF", "SF"};
+    // "ZF","SF",,,,,,
+    FLAG(TO_STRING)};
 
-typedef struct Instruction
+typedef struct
 {
-    opcode opcode;
-    reg_id dest;
-    reg_id src1;
-    reg_id src2;
+    int reg[REG_COUNT];
+    int pc;
+    int flag[FLAG_COUNT]; // OF,CFは今回除外
+} Cpu;
+
+typedef enum
+{
+    // IMM,MOV,,,,,,
+    MNEMONIC(TO_ENUM)
+} Opcode_id;
+
+typedef struct
+{
+    const char *mnemonic;
+    Opcode_id code;
+} Opcode_info;
+
+Opcode_info opcode_table[] = {
+    // {"IMM", IMM}, {"MOV", MOV},,,,,,
+    MNEMONIC(TO_STR_AND_ENUM)};
+
+typedef struct
+{
+    Opcode_id opcode;
+    Reg_id dest;
+    Reg_id src1;
+    Reg_id src2;
     int value;
-} inst;
-void results_display(cpu *my_cpu, int reg_length, int flag_length)
+} Inst;
+
+void results_display(Cpu *my_cpu)
 {
     printf("[結果]\n");
-    for (int i = 0; i < reg_length; i++)
+    for (int i = 0; i < REG_COUNT; i++)
     {
         printf("%s:%d\n", reg_names[i], my_cpu->reg[i]);
     }
-    for (int i = 0; i < flag_length; i++)
+    for (int i = 0; i < FLAG_COUNT; i++)
     {
         printf("%s:%d\n", flag_names[i], my_cpu->flag[i]);
     }
 }
-void instruction_execution(cpu *ptr_my_cpu, inst my_inst[], int inst_length, int reg_length, int flag_length)
+void instruction_execution(Cpu *ptr_my_cpu, Inst my_inst[], int my_inst_length)
 {
-    while (ptr_my_cpu->pc < inst_length)
+    while (ptr_my_cpu->pc < my_inst_length)
     {
-        inst current = my_inst[ptr_my_cpu->pc];
+        Inst current = my_inst[ptr_my_cpu->pc];
         printf("<命令%d>\n", ptr_my_cpu->pc + 1);
         switch (current.opcode)
         {
@@ -121,7 +159,7 @@ void instruction_execution(cpu *ptr_my_cpu, inst my_inst[], int inst_length, int
         }
         case JMP:
         {
-            if (current.value < 1 || current.value > inst_length)
+            if (current.value < 1 || current.value > my_inst_length)
             {
                 printf("<命令%d>がエラーです\n", ptr_my_cpu->pc + 1);
                 break;
@@ -133,16 +171,16 @@ void instruction_execution(cpu *ptr_my_cpu, inst my_inst[], int inst_length, int
         }
         case CMP:
         {
-            for (int i = 0; i < flag_length; i++)
+            for (int i = 0; i < FLAG_COUNT; i++)
             {
                 ptr_my_cpu->flag[i] = 0;
             }
-            int CMP_result = ptr_my_cpu->reg[current.src1] - ptr_my_cpu->reg[current.src2];
-            if (CMP_result == 0)
+            int cmp_result = ptr_my_cpu->reg[current.src1] - ptr_my_cpu->reg[current.src2];
+            if (cmp_result == 0)
             {
                 ptr_my_cpu->flag[ZF] = 1;
             }
-            if (CMP_result < 0)
+            if (cmp_result < 0)
             {
                 ptr_my_cpu->flag[SF] = 1;
             }
@@ -151,7 +189,7 @@ void instruction_execution(cpu *ptr_my_cpu, inst my_inst[], int inst_length, int
         }
         case JE:
         {
-            if (current.value < 1 || current.value > inst_length)
+            if (current.value < 1 || current.value > my_inst_length)
             {
                 printf("<命令%d>がエラーです\n", ptr_my_cpu->pc + 1);
                 break;
@@ -165,7 +203,7 @@ void instruction_execution(cpu *ptr_my_cpu, inst my_inst[], int inst_length, int
         }
         case JNE:
         {
-            if (current.value < 1 || current.value > inst_length)
+            if (current.value < 1 || current.value > my_inst_length)
             {
                 printf("<命令%d>がエラーです\n", ptr_my_cpu->pc + 1);
                 break;
@@ -179,7 +217,7 @@ void instruction_execution(cpu *ptr_my_cpu, inst my_inst[], int inst_length, int
         }
         case JG:
         {
-            if (current.value < 1 || current.value > inst_length)
+            if (current.value < 1 || current.value > my_inst_length)
             {
                 printf("<命令%d>がエラーです\n", ptr_my_cpu->pc + 1);
                 break;
@@ -193,7 +231,7 @@ void instruction_execution(cpu *ptr_my_cpu, inst my_inst[], int inst_length, int
         }
         case JL:
         {
-            if (current.value < 1 || current.value > inst_length)
+            if (current.value < 1 || current.value > my_inst_length)
             {
                 printf("<命令%d>がエラーです\n", ptr_my_cpu->pc + 1);
                 break;
@@ -207,7 +245,7 @@ void instruction_execution(cpu *ptr_my_cpu, inst my_inst[], int inst_length, int
         }
         case JGE:
         {
-            if (current.value < 1 || current.value > inst_length)
+            if (current.value < 1 || current.value > my_inst_length)
             {
                 printf("<命令%d>がエラーです\n", ptr_my_cpu->pc + 1);
                 break;
@@ -221,7 +259,7 @@ void instruction_execution(cpu *ptr_my_cpu, inst my_inst[], int inst_length, int
         }
         case JLE:
         {
-            if (current.value < 1 || current.value > inst_length)
+            if (current.value < 1 || current.value > my_inst_length)
             {
                 printf("<命令%d>がエラーです\n", ptr_my_cpu->pc + 1);
                 break;
@@ -258,26 +296,26 @@ void instruction_execution(cpu *ptr_my_cpu, inst my_inst[], int inst_length, int
             break;
         }
         }
-        results_display(ptr_my_cpu, reg_length, flag_length);
+        results_display(ptr_my_cpu);
         ptr_my_cpu->pc++;
     }
 }
 
-void draw_cpu(cpu *before_my_cpu, cpu *after_my_cpu, int reg_length, int flag_length)
+void draw_cpu(Cpu *before_my_cpu, Cpu *after_my_cpu)
 {
     printf("\n");
     printf("      before          after      \n");
     printf("+---------------+---------------+\n");
     printf("|      CPU      |      CPU      |\n");
     printf("+---------------+---------------+\n");
-    for (int i = 0; i < reg_length; i++)
+    for (int i = 0; i < REG_COUNT; i++)
     {
         // printf("|               |               |\n");
         printf("|  %-5s:%5d  |  %-5s:%5d  |\n", reg_names[i], before_my_cpu->reg[i], reg_names[i], after_my_cpu->reg[i]);
     }
     printf("+---------------+---------------+\n");
     printf("|     FLAGS     |     FLAGS     |\n");
-    for (int i = 0; i < flag_length; i++)
+    for (int i = 0; i < FLAG_COUNT; i++)
     {
         printf("|  %-5s:%5d  |  %-5s:%5d  |\n", flag_names[i], before_my_cpu->flag[i], flag_names[i], after_my_cpu->flag[i]);
     }
@@ -285,33 +323,73 @@ void draw_cpu(cpu *before_my_cpu, cpu *after_my_cpu, int reg_length, int flag_le
     printf("+---------------+---------------+\n");
     printf("\n");
 }
-void memory_cpu(cpu *ptr_my_cpu, cpu *ptr_memo_cpu)
+void memory_cpu(Cpu *ptr_my_cpu, Cpu *ptr_memo_cpu)
 {
     *ptr_memo_cpu = *ptr_my_cpu;
 }
 
 int main(void)
 {
-    cpu my_cpu = {0};
-    cpu *ptr_my_cpu = &my_cpu;
+    Cpu my_cpu = {0};
+    Cpu *ptr_my_cpu = &my_cpu;
 
-    cpu memo_cpu = {0};
-    cpu *ptr_memo_cpu = &memo_cpu;
+    Cpu memo_cpu = {0};
+    Cpu *ptr_memo_cpu = &memo_cpu;
 
-    inst my_inst[] = {
-        {.opcode = IMM, .dest = eax, .value = 5},               // 1
-        {.opcode = IMM, .dest = ebx, .value = 1},               // 2
-        {.opcode = SUB, .dest = eax, .src1 = eax, .src2 = ebx}, // 3
-        {.opcode = CMP, .src1 = eax, .src2 = ebx},              // 4
-        {.opcode = JG, .value = 3},                             // 5
-    };
+    const char *file_name = "program.asm";
 
-    int inst_length = sizeof(my_inst) / sizeof(my_inst[0]);
-    int reg_length = sizeof(reg_names) / sizeof(reg_names[0]);
-    int flag_length = sizeof(my_cpu.flag) / sizeof(my_cpu.flag[0]);
-    memory_cpu(ptr_my_cpu, ptr_memo_cpu);
-    instruction_execution(ptr_my_cpu, my_inst, inst_length, reg_length, flag_length);
-    draw_cpu(ptr_memo_cpu, ptr_my_cpu, reg_length, flag_length);
+    FILE *fp = fopen(file_name, "r");
+    if (!fp)
+    {
+        printf("ファイルを開けません\n");
+        return 1;
+    }
+    else
+    {
+        printf("開けてる");
+        // // ファイル行数取得
+        // int whole_line_count = 0;
+        // int checker;
+        // while ((checker = fgetc(fp)) != EOF)
+        // {
+        //     if (checker == '\n')
+        //     {
+        //         whole_line_count++;
+        //     }
+        // }
+        // rewind(fp);
+
+        // Inst my_inst[whole_line_count];
+        // char line[100];
+        // char mnemonic[10];
+        // int line_count = 0;
+
+        // while (fgets(line, sizeof(line), fp) != NULL)
+        // {
+        //     char *ptr_space = strchr(line, ' ');    // 空白のアドレス
+        //     int mnemonic_length = ptr_space - line; //
+
+        //     for (int i = 0; i < mnemonic_length; i++)
+        //     {
+        //         mnemonic[i] = line[i];
+        //     }
+        //     mnemonic[mnemonic_length] = '\0';
+        //     // // 文字列比較のためにopcodeに文字が必要。{"IMM",IMM}で管理する
+        //     // for (int i = 0; i < sizeof(Opcode_id) / sizeof(Opcode_id[0]); i++)
+        //     // {
+        //     //     if (strcmp(mnemonic, Opcode_id[i].name){
+        //     //         my_inst[line_count].opcode = IMM;
+        //     // }
+        //     // }
+
+        //     line_count++;
+        // }
+
+        // fclose(fp);
+
+        // int my_inst_length = sizeof(my_inst) / sizeof(my_inst[0]);
+        // memory_cpu(ptr_my_cpu, ptr_memo_cpu);
+        // instruction_execution(ptr_my_cpu, my_inst, my_inst_length);
+        // draw_cpu(ptr_memo_cpu, ptr_my_cpu);
+    }
 }
-
-// reg_lengthの数を一括管理,論理演算途中,そろそろasmファイルの読み取り
